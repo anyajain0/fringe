@@ -48,20 +48,38 @@
 
         <div class="hero-poster card poster-main">
           <div class="poster-topline">
-            <span>FRIEND</span>
-            <span>MATCH</span>
-            <span>SIDEQUEST</span>
+            <span>LOCAL WEBSITE</span>
+            <span>WITHIN 5 MILES</span>
+            <span>FRIEND MODE</span>
           </div>
           <div class="poster-graphic">
-            <div class="poster-block block-black">5</div>
-            <div class="poster-block block-yellow">MI</div>
-            <div class="poster-column column-one"></div>
-            <div class="poster-column column-two"></div>
-            <div class="poster-caption">local mode</div>
+            <div class="poster-grid">
+              <div class="poster-panel poster-panel-wide">
+                <p class="poster-label">fringe nearby</p>
+                <strong>04 open profiles</strong>
+                <span>shared interests, close distance, quick plans</span>
+              </div>
+              <div class="poster-panel accent-yellow">
+                <p class="poster-label">radius</p>
+                <strong>5 mi</strong>
+              </div>
+              <div class="poster-panel accent-blue">
+                <p class="poster-label">status</p>
+                <strong>live</strong>
+              </div>
+              <div class="poster-panel poster-list">
+                <p class="poster-label">tonight</p>
+                <ul>
+                  <li>bookstore run</li>
+                  <li>study sprint</li>
+                  <li>pastry stop</li>
+                </ul>
+              </div>
+            </div>
           </div>
           <div class="poster-bottomline">
-            <strong>Local only.</strong>
-            <p>Profiles, messages, likes, and sidequests stay saved in this browser.</p>
+            <strong>Make an account. Match nearby. Go do something.</strong>
+            <p>Profiles, likes, messages, and sidequests are tied to your signed-in account.</p>
           </div>
         </div>
 
@@ -80,8 +98,8 @@
 
       <section class="stats-strip">
         <article class="stat-card card">
-          <strong>Accounts save locally</strong>
-          <p>Email, profile details, likes, messages, and quests are stored in this browser.</p>
+          <strong>Password-based accounts</strong>
+          <p>Create a real account with an email, password, and verification code flow backed by Cloudflare.</p>
         </article>
         <article class="stat-card card">
           <strong>Match with nearby people</strong>
@@ -89,15 +107,15 @@
         </article>
         <article class="stat-card card">
           <strong>Use it end-to-end</strong>
-          <p>Create a profile, sign in, message a match, and spin a sidequest without leaving the site.</p>
+          <p>Register, verify, sign in, message a match, and save sidequests without leaving the site.</p>
         </article>
       </section>
 
       <section class="section-block" id="account">
         <div class="section-header">
           <p class="eyebrow">account</p>
-          <h2>Create or reopen your profile.</h2>
-          <p>The account system below works on the website itself and saves to your browser on this device.</p>
+          <h2>Create, verify, or reopen your profile.</h2>
+          <p>The account system below is backed by Cloudflare. Right now the verification flow works end to end with a visible code preview while the final sending domain is still being connected.</p>
         </div>
 
         <div class="account-grid">
@@ -132,6 +150,14 @@
                 <span>Favorite spot</span>
                 <input id="spot" name="spot" type="text" placeholder="Honeydew Cafe" required>
               </label>
+              <label class="field">
+                <span>Password</span>
+                <input id="password" name="password" type="password" placeholder="Create a password" required>
+              </label>
+              <label class="field">
+                <span>Confirm password</span>
+                <input id="confirm-password" name="confirmPassword" type="password" placeholder="Repeat password" required>
+              </label>
             </div>
 
             <label class="field full-width">
@@ -163,12 +189,22 @@
           <div class="card sign-in-card">
             <div class="section-kicker">
               <span>02</span>
-              <h3>Saved accounts</h3>
+              <h3>Sign in + verify</h3>
             </div>
 
             <label class="field">
-              <span>Load by email</span>
+              <span>Email</span>
               <input id="lookup-email" type="email" placeholder="you@example.com">
+            </label>
+
+            <label class="field">
+              <span>Password</span>
+              <input id="login-password" type="password" placeholder="Enter your password">
+            </label>
+
+            <label class="field">
+              <span>Verification code</span>
+              <input id="verification-code" type="text" placeholder="6-digit code">
             </label>
 
             <label class="field">
@@ -178,8 +214,15 @@
 
             <div class="form-actions compact-actions">
               <button class="solid-button" type="button" id="sign-in-account">Sign in</button>
+              <button class="ghost-button" type="button" id="send-code">Send code</button>
+              <button class="outline-button" type="button" id="verify-code">Verify</button>
+            </div>
+
+            <div class="form-actions compact-actions">
               <button class="outline-button" type="button" id="delete-account">Delete</button>
             </div>
+
+            <p class="status-text" id="verify-status" aria-live="polite"></p>
 
             <div class="saved-profile" id="saved-profile">
               <div class="saved-avatar" id="saved-avatar">F</div>
@@ -211,9 +254,14 @@
             </div>
 
             <div class="match-visual">
-              <div class="shape shape-a"></div>
-              <div class="shape shape-b"></div>
-              <div class="shape shape-c"></div>
+              <div class="match-visual-card primary-tile">
+                <p class="match-visual-label">top overlap</p>
+                <strong id="match-score">3 shared tags</strong>
+              </div>
+              <div class="match-visual-card secondary-tile">
+                <p class="match-visual-label">meetup energy</p>
+                <strong>easy first plan</strong>
+              </div>
             </div>
 
             <div class="match-copy">

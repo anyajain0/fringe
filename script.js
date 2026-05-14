@@ -69,17 +69,22 @@ const profiles = [
 ];
 
 const localKeys = {
-  activeEmail: "fringe-active-email",
+  token: "fringe-session-token",
   knownEmails: "fringe-known-emails"
 };
 
 const accountForm = document.querySelector("#account-form");
 const resetFormButton = document.querySelector("#reset-form");
 const lookupEmailInput = document.querySelector("#lookup-email");
+const loginPasswordInput = document.querySelector("#login-password");
+const verificationCodeInput = document.querySelector("#verification-code");
 const accountPicker = document.querySelector("#account-picker");
 const signInButton = document.querySelector("#sign-in-account");
+const sendCodeButton = document.querySelector("#send-code");
+const verifyCodeButton = document.querySelector("#verify-code");
 const deleteAccountButton = document.querySelector("#delete-account");
 const accountStatus = document.querySelector("#account-status");
+const verifyStatus = document.querySelector("#verify-status");
 
 const heroAccountName = document.querySelector("#hero-account-name");
 const heroAccountStatus = document.querySelector("#hero-account-status");
@@ -93,6 +98,7 @@ const matchName = document.querySelector("#match-name");
 const matchDistance = document.querySelector("#match-distance");
 const matchAbout = document.querySelector("#match-about");
 const matchTags = document.querySelector("#match-tags");
+const matchScore = document.querySelector("#match-score");
 const skipMatchButton = document.querySelector("#skip-match");
 const likeMatchButton = document.querySelector("#like-match");
 const likesList = document.querySelector("#likes-list");
@@ -117,9 +123,9 @@ const questStatus = document.querySelector("#quest-status");
 const scrollButtons = document.querySelectorAll("[data-scroll-target]");
 
 let activeAccount = null;
+let currentLikes = [];
 let currentMatchIndex = 0;
 let currentQuestIndex = 0;
-let currentLikes = [];
 
 function loadLocal(key, fallback) {
   const raw = localStorage.getItem(key);
@@ -136,6 +142,14 @@ function loadLocal(key, fallback) {
 
 function saveLocal(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
+}
+
+function getToken() {
+  return loadLocal(localKeys.token, "");
+}
+
+function setToken(token) {
+  saveLocal(localKeys.token, token || "");
 }
 
 function getKnownEmails() {
@@ -158,27 +172,28 @@ function removeKnownEmail(email) {
   setKnownEmails(getKnownEmails().filter((entry) => entry !== email));
 }
 
-function setActiveEmail(email) {
-  saveLocal(localKeys.activeEmail, email || "");
-}
-
-function getActiveEmail() {
-  return loadLocal(localKeys.activeEmail, "");
-}
-
 async function api(path, options = {}) {
+  const token = getToken();
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {})
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   const response = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {})
-    },
+    headers,
     ...options
   });
 
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error || "Request failed.");
+    const error = new Error(data.error || "Request failed.");
+    error.payload = data;
+    throw error;
   }
 
   return data;
@@ -196,6 +211,8 @@ function setFormFromAccount(account) {
   accountForm.vibe.value = account.vibe;
   accountForm.spot.value = account.favoriteSpot;
   accountForm.about.value = account.about;
+  accountForm.password.value = "";
+  accountForm.confirmPassword.value = "";
 
   document.querySelectorAll('input[name="interests"]').forEach((input) => {
     input.checked = account.interests.includes(input.value);
@@ -214,7 +231,7 @@ function renderKnownEmails() {
   accountPicker.innerHTML = "";
 
   if (!emails.length) {
-    accountPicker.innerHTML = "<option value=\"\">No known accounts yet</option>";
+    accountPicker.innerHTML = "<option value=\"\">No known emails yet</option>";
     return;
   }
 
@@ -225,9 +242,8 @@ function renderKnownEmails() {
     accountPicker.appendChild(option);
   });
 
-  const activeEmail = getActiveEmail();
-  if (activeEmail) {
-    accountPicker.value = activeEmail;
+  if (lookupEmailInput.value) {
+    accountPicker.value = lookupEmailInput.value;
   }
 }
 
@@ -237,17 +253,17 @@ function renderActiveAccount() {
     heroAccountStatus.textContent = "Create an account to unlock saved matches, messages, and quests.";
     savedAvatar.textContent = "F";
     savedName.textContent = "No active account";
-    savedMeta.textContent = "Create or sign in to get started";
-    savedAbout.textContent = "This panel updates when you save or sign in to an account.";
+    savedMeta.textContent = "Create, verify, or sign in to get started";
+    savedAbout.textContent = "This panel updates when you save, verify, or sign in to an account.";
     savedInterests.innerHTML = "<span>nothing saved yet</span>";
     return;
   }
 
   heroAccountName.textContent = `${activeAccount.name}, ${activeAccount.age}`;
-  heroAccountStatus.textContent = `${activeAccount.neighborhood} • ${activeAccount.vibe} • ${activeAccount.email}`;
+  heroAccountStatus.textContent = `${activeAccount.neighborhood} • ${activeAccount.vibe} • ${activeAccount.verified ? "verified" : "not verified"}`;
   savedAvatar.textContent = activeAccount.name.charAt(0).toUpperCase();
   savedName.textContent = `${activeAccount.name}, ${activeAccount.age}`;
-  savedMeta.textContent = `${activeAccount.neighborhood} • ${activeAccount.favoriteSpot}`;
+  savedMeta.textContent = `${activeAccount.email} • ${activeAccount.favoriteSpot}`;
   savedAbout.textContent = activeAccount.about;
   savedInterests.innerHTML = "";
 
@@ -281,12 +297,15 @@ function renderCurrentMatch() {
     matchDistance.textContent = "";
     matchAbout.textContent = "You have already liked every demo profile for this account.";
     matchTags.innerHTML = "<span>Try another account or keep messaging your matches.</span>";
+    matchScore.textContent = "0 shared tags";
     return;
   }
 
+  const overlapCount = scoreProfile(profile);
   matchName.textContent = profile.name;
   matchDistance.textContent = profile.distance;
   matchAbout.textContent = profile.about;
+  matchScore.textContent = `${overlapCount} shared ${overlapCount === 1 ? "tag" : "tags"}`;
   matchTags.innerHTML = "";
 
   profile.interests.forEach((interest) => {
@@ -353,7 +372,7 @@ async function renderMessages() {
     return;
   }
 
-  const { messages } = await api(`/messages?email=${encodeURIComponent(activeAccount.email)}&profileId=${encodeURIComponent(threadPicker.value)}`);
+  const { messages } = await api(`/messages?profileId=${encodeURIComponent(threadPicker.value)}`);
 
   if (!messages.length) {
     threadList.innerHTML = "<div><strong>Start the thread</strong><span>Send your first message to get this conversation going.</span></div>";
@@ -375,7 +394,7 @@ async function renderQuestHistory() {
     return;
   }
 
-  const { quests: savedQuests } = await api(`/quests?email=${encodeURIComponent(activeAccount.email)}`);
+  const { quests: savedQuests } = await api("/quests");
 
   if (!savedQuests.length) {
     questHistory.innerHTML = "<div><strong>No sidequests saved</strong><span>Spin one and attach it to a liked profile.</span></div>";
@@ -395,7 +414,7 @@ async function loadLikes() {
     return;
   }
 
-  const { likes } = await api(`/likes?email=${encodeURIComponent(activeAccount.email)}`);
+  const { likes } = await api("/likes");
   currentLikes = likes.map((entry) => entry.profile_id);
 }
 
@@ -410,27 +429,24 @@ async function refreshSignedInState() {
   await renderQuestHistory();
 }
 
-async function signInWithEmail(email) {
-  const normalized = String(email || "").trim().toLowerCase();
-
-  if (!normalized) {
-    accountStatus.textContent = "Enter or choose an email to sign in.";
+async function loadMe() {
+  const token = getToken();
+  if (!token) {
+    activeAccount = null;
+    await refreshSignedInState();
     return;
   }
 
-  const { account } = await api(`/accounts?email=${encodeURIComponent(normalized)}`);
-
-  if (!account) {
-    accountStatus.textContent = "No saved account exists for that email on the backend yet.";
-    return;
+  try {
+    const { account } = await api("/auth/me");
+    activeAccount = account;
+    addKnownEmail(account.email);
+    setFormFromAccount(account);
+  } catch {
+    setToken("");
+    activeAccount = null;
   }
 
-  activeAccount = account;
-  addKnownEmail(account.email);
-  setActiveEmail(account.email);
-  setFormFromAccount(account);
-  accountStatus.textContent = `${account.name} is now signed in.`;
-  currentMatchIndex = 0;
   await refreshSignedInState();
 }
 
@@ -457,6 +473,19 @@ accountForm.addEventListener("submit", async (event) => {
     return;
   }
 
+  const password = accountForm.password.value;
+  const confirmPassword = accountForm.confirmPassword.value;
+
+  if (password.length < 8) {
+    accountStatus.textContent = "Password should be at least 8 characters.";
+    return;
+  }
+
+  if (password !== confirmPassword) {
+    accountStatus.textContent = "Passwords do not match.";
+    return;
+  }
+
   const account = {
     name: accountForm.name.value.trim(),
     email: accountForm.email.value.trim().toLowerCase(),
@@ -465,21 +494,24 @@ accountForm.addEventListener("submit", async (event) => {
     vibe: accountForm.vibe.value.trim(),
     favoriteSpot: accountForm.spot.value.trim(),
     about: accountForm.about.value.trim(),
-    interests
+    interests,
+    password
   };
 
   try {
-    await api("/accounts", {
+    const result = await api("/auth/register", {
       method: "POST",
       body: JSON.stringify(account)
     });
 
-    activeAccount = account;
     addKnownEmail(account.email);
-    setActiveEmail(account.email);
-    currentMatchIndex = 0;
-    accountStatus.textContent = `${account.name}'s account is saved on the backend and active here.`;
-    await refreshSignedInState();
+    renderKnownEmails();
+    lookupEmailInput.value = account.email;
+    accountPicker.value = account.email;
+    accountStatus.textContent = `${account.name}'s account was created and is ready for verification.`;
+    verifyStatus.textContent = result.verificationPreviewCode
+      ? `Verification code generated. Developer preview code: ${result.verificationPreviewCode}`
+      : "Verification code sent.";
   } catch (error) {
     accountStatus.textContent = error.message;
   }
@@ -490,40 +522,110 @@ resetFormButton.addEventListener("click", () => {
   accountStatus.textContent = "Form cleared.";
 });
 
-signInButton.addEventListener("click", async () => {
-  try {
-    await signInWithEmail(lookupEmailInput.value || accountPicker.value);
-  } catch (error) {
-    accountStatus.textContent = error.message;
+accountPicker.addEventListener("change", () => {
+  if (accountPicker.value) {
+    lookupEmailInput.value = accountPicker.value;
   }
 });
 
-deleteAccountButton.addEventListener("click", async () => {
-  const targetEmail = (lookupEmailInput.value || accountPicker.value || getActiveEmail()).trim().toLowerCase();
+signInButton.addEventListener("click", async () => {
+  const email = (lookupEmailInput.value || accountPicker.value).trim().toLowerCase();
+  const password = loginPasswordInput.value;
 
-  if (!targetEmail) {
-    accountStatus.textContent = "Choose an email to delete.";
+  try {
+    const result = await api("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password })
+    });
+
+    setToken(result.token);
+    activeAccount = result.account;
+    addKnownEmail(result.account.email);
+    setFormFromAccount(result.account);
+    accountStatus.textContent = `${result.account.name} is now signed in.`;
+    verifyStatus.textContent = "";
+    currentMatchIndex = 0;
+    await refreshSignedInState();
+  } catch (error) {
+    if (error.payload?.needsVerification) {
+      verifyStatus.textContent = "This account still needs verification. Request a code and verify it below.";
+    } else {
+      verifyStatus.textContent = error.message;
+    }
+  }
+});
+
+sendCodeButton.addEventListener("click", async () => {
+  const email = (lookupEmailInput.value || accountPicker.value).trim().toLowerCase();
+
+  if (!email) {
+    verifyStatus.textContent = "Enter an email before requesting a code.";
     return;
   }
 
   try {
-    await api(`/accounts?email=${encodeURIComponent(targetEmail)}`, {
-      method: "DELETE"
+    const result = await api("/auth/request-code", {
+      method: "POST",
+      body: JSON.stringify({ email })
     });
 
-    removeKnownEmail(targetEmail);
+    addKnownEmail(email);
+    renderKnownEmails();
+    accountPicker.value = email;
+    verifyStatus.textContent = result.verificationPreviewCode
+      ? `Verification code regenerated. Developer preview code: ${result.verificationPreviewCode}`
+      : "Verification code sent.";
+  } catch (error) {
+    verifyStatus.textContent = error.message;
+  }
+});
 
-    if (activeAccount && activeAccount.email === targetEmail) {
-      activeAccount = null;
-      setActiveEmail("");
-      clearFormFields();
-    }
+verifyCodeButton.addEventListener("click", async () => {
+  const email = (lookupEmailInput.value || accountPicker.value).trim().toLowerCase();
+  const code = verificationCodeInput.value.trim();
 
-    accountStatus.textContent = "Selected account deleted from the backend.";
+  if (!email || !code) {
+    verifyStatus.textContent = "Enter both email and verification code.";
+    return;
+  }
+
+  try {
+    const result = await api("/auth/verify", {
+      method: "POST",
+      body: JSON.stringify({ email, code })
+    });
+
+    setToken(result.token);
+    activeAccount = result.account;
+    addKnownEmail(result.account.email);
+    setFormFromAccount(result.account);
+    verifyStatus.textContent = "Account verified and signed in.";
+    accountStatus.textContent = `${result.account.name}'s account is now active.`;
     currentMatchIndex = 0;
     await refreshSignedInState();
   } catch (error) {
-    accountStatus.textContent = error.message;
+    verifyStatus.textContent = error.message;
+  }
+});
+
+deleteAccountButton.addEventListener("click", async () => {
+  if (!activeAccount) {
+    verifyStatus.textContent = "Sign in before deleting the current account.";
+    return;
+  }
+
+  try {
+    await api("/accounts", { method: "DELETE" });
+    removeKnownEmail(activeAccount.email);
+    setToken("");
+    activeAccount = null;
+    clearFormFields();
+    verifyStatus.textContent = "";
+    accountStatus.textContent = "Current account deleted.";
+    currentMatchIndex = 0;
+    await refreshSignedInState();
+  } catch (error) {
+    verifyStatus.textContent = error.message;
   }
 });
 
@@ -534,7 +636,7 @@ skipMatchButton.addEventListener("click", () => {
 
 likeMatchButton.addEventListener("click", async () => {
   if (!activeAccount) {
-    accountStatus.textContent = "Create or sign in to an account before liking profiles.";
+    accountStatus.textContent = "Sign in to save likes.";
     return;
   }
 
@@ -549,13 +651,9 @@ likeMatchButton.addEventListener("click", async () => {
   try {
     await api("/likes", {
       method: "POST",
-      body: JSON.stringify({
-        email: activeAccount.email,
-        profileId: profile.id
-      })
+      body: JSON.stringify({ profileId: profile.id })
     });
-
-    accountStatus.textContent = `${profile.name} was saved to your likes.`;
+    accountStatus.textContent = `${profile.name} was added to your likes.`;
     currentMatchIndex = 0;
     await refreshSignedInState();
   } catch (error) {
@@ -591,7 +689,6 @@ messageForm.addEventListener("submit", async (event) => {
     await api("/messages", {
       method: "POST",
       body: JSON.stringify({
-        email: activeAccount.email,
         profileId: profile.id,
         sender: activeAccount.name,
         text
@@ -601,7 +698,6 @@ messageForm.addEventListener("submit", async (event) => {
     await api("/messages", {
       method: "POST",
       body: JSON.stringify({
-        email: activeAccount.email,
         profileId: profile.id,
         sender: profile.name.split(",")[0],
         text: `That sounds fun. ${profile.favoriteSpot} could work for me.`
@@ -632,7 +728,6 @@ saveQuestButton.addEventListener("click", async () => {
     await api("/quests", {
       method: "POST",
       body: JSON.stringify({
-        email: activeAccount.email,
         profileId: profile.id,
         matchName: profile.name,
         title: questTitle.textContent,
@@ -662,16 +757,5 @@ scrollButtons.forEach((button) => {
 
 (async () => {
   renderKnownEmails();
-  const activeEmail = getActiveEmail();
-
-  if (activeEmail) {
-    try {
-      await signInWithEmail(activeEmail);
-      return;
-    } catch {
-      setActiveEmail("");
-    }
-  }
-
-  await refreshSignedInState();
+  await loadMe();
 })();
