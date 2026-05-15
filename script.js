@@ -95,6 +95,8 @@ const verifyCodeButton = document.querySelector("#verify-code");
 const deleteAccountButton = document.querySelector("#delete-account");
 const accountStatus = document.querySelector("#account-status");
 const verifyStatus = document.querySelector("#verify-status");
+const verificationPreview = document.querySelector("#verification-preview");
+const verificationPreviewText = document.querySelector("#verification-preview-text");
 
 const heroAccountName = document.querySelector("#hero-account-name");
 const heroAccountStatus = document.querySelector("#hero-account-status");
@@ -138,6 +140,7 @@ let currentMatches = [];
 let currentMatchIndex = 0;
 let currentQuestIndex = 0;
 let pendingVerificationEmail = "";
+let latestVerificationCode = "";
 
 function loadLocal(key, fallback) {
   const raw = localStorage.getItem(key);
@@ -206,7 +209,16 @@ function resolveLoginEmail(identifier) {
     return value;
   }
 
-  return getKnownAccounts().find((entry) => entry.username === normalizeUsername(value))?.email || "";
+  const fromKnown = getKnownAccounts().find((entry) => entry.username === normalizeUsername(value))?.email;
+  if (fromKnown) {
+    return fromKnown;
+  }
+
+  if (normalizeUsername(usernameField.value) === normalizeUsername(value)) {
+    return emailField.value.trim().toLowerCase();
+  }
+
+  return "";
 }
 
 function enrichAccount(account, identifier = "") {
@@ -341,6 +353,19 @@ function updateAuthGates() {
   authRequiredSections.forEach((section) => {
     section.classList.toggle("is-locked", !unlocked);
   });
+}
+
+function setVerificationPreview(code = "") {
+  latestVerificationCode = code || "";
+
+  if (!latestVerificationCode) {
+    verificationPreview.hidden = true;
+    verificationPreviewText.textContent = "A preview code will show here when verification is required.";
+    return;
+  }
+
+  verificationPreview.hidden = false;
+  verificationPreviewText.textContent = latestVerificationCode;
 }
 
 function scoreProfile(profile) {
@@ -545,6 +570,7 @@ async function loadMe() {
     const { account } = await api("/auth/me");
     activeAccount = enrichAccount(account);
     pendingVerificationEmail = "";
+    setVerificationPreview("");
     addKnownAccount(activeAccount);
     setFormFromAccount(activeAccount);
   } catch {
@@ -644,6 +670,7 @@ accountForm.addEventListener("submit", async (event) => {
     accountPicker.value = account.username;
     loginPasswordInput.value = password;
     pendingVerificationEmail = "";
+    setVerificationPreview("");
     accountStatus.textContent = `${account.name}'s account was created. Sign in with your username and password to finish your first verification.`;
     verifyStatus.textContent = "Your first sign-in will trigger the 6-digit verification step.";
     updateInteractionStates();
@@ -668,9 +695,10 @@ signInButton.addEventListener("click", async () => {
   const email = resolveLoginEmail(identifier);
   const password = loginPasswordInput.value;
   pendingVerificationEmail = "";
+  setVerificationPreview("");
 
   if (!email) {
-    verifyStatus.textContent = "Enter a known username or a full email address to sign in.";
+    verifyStatus.textContent = "Use the email tied to the account, or a username that was created in this browser.";
     return;
   }
 
@@ -695,10 +723,8 @@ signInButton.addEventListener("click", async () => {
       try {
         pendingVerificationEmail = email;
         const codeResult = await requestVerificationCode(email);
-        const previewSuffix = codeResult.verificationPreviewCode
-          ? ` Developer preview code: ${codeResult.verificationPreviewCode}`
-          : "";
-        verifyStatus.textContent = `This is your first sign-in, so we sent a 6-digit verification code to your email. Enter it below to finish signing in.${previewSuffix}`;
+        setVerificationPreview(codeResult.verificationPreviewCode || "");
+        verifyStatus.textContent = "This is your first sign-in. Enter the 6-digit verification code below to finish signing in.";
         updateInteractionStates();
       } catch (requestError) {
         verifyStatus.textContent = requestError.message;
@@ -724,9 +750,8 @@ sendCodeButton.addEventListener("click", async () => {
     addKnownAccount({ email, username });
     renderKnownAccounts();
     accountPicker.value = username;
-    verifyStatus.textContent = result.verificationPreviewCode
-      ? `Verification code sent. Developer preview code: ${result.verificationPreviewCode}`
-      : "Verification code sent.";
+    setVerificationPreview(result.verificationPreviewCode || "");
+    verifyStatus.textContent = "Verification code refreshed. Enter it below to continue.";
     updateInteractionStates();
   } catch (error) {
     verifyStatus.textContent = error.message;
@@ -752,6 +777,7 @@ verifyCodeButton.addEventListener("click", async () => {
     setToken(result.token);
     activeAccount = enrichAccount(result.account, identifier);
     pendingVerificationEmail = "";
+    setVerificationPreview("");
     addKnownAccount(activeAccount);
     setFormFromAccount(activeAccount);
     verifyStatus.textContent = "Account verified and signed in.";
@@ -776,6 +802,7 @@ deleteAccountButton.addEventListener("click", async () => {
     setToken("");
     activeAccount = null;
     pendingVerificationEmail = "";
+    setVerificationPreview("");
     clearFormFields();
     loginIdentifierInput.value = "";
     loginPasswordInput.value = "";
@@ -921,5 +948,6 @@ scrollButtons.forEach((button) => {
 (async () => {
   renderKnownAccounts();
   spinQuest();
+  setVerificationPreview("");
   await loadMe();
 })();

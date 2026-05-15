@@ -168,6 +168,9 @@
             <p class="inline-note">
               Sign in with your username or email and password. If this is your first login, Fringe will ask for a 6-digit verification code.
             </p>
+            <p class="inline-note warning-note">
+              Email delivery is not fully connected in this environment yet, so verification currently falls back to a visible preview code instead of a real inbox email.
+            </p>
 
             <label class="field">
               <span>Username or email</span>
@@ -200,6 +203,10 @@
             </div>
 
             <p class="status-text" id="verify-status" aria-live="polite"></p>
+            <div class="verification-preview" id="verification-preview" hidden>
+              <strong>Verification code</strong>
+              <p id="verification-preview-text">A preview code will show here when verification is required.</p>
+            </div>
 
             <div class="saved-profile" id="saved-profile">
               <div class="saved-avatar" id="saved-avatar">F</div>
