@@ -307,7 +307,7 @@ export default {
         return json({ success: true });
       }
 
-      if (path === "/api/likes" && request.method === "GET") {
+      if ((path === "/api/likes" || path === "/api/matches") && request.method === "GET") {
         const session = await requireSession(env, request);
         if (session.error) {
           return session.error;
@@ -316,10 +316,10 @@ export default {
         const rows = await env.DB.prepare(
           "SELECT profile_id, created_at FROM likes WHERE email = ? ORDER BY created_at DESC"
         ).bind(session.email).all();
-        return json({ likes: rows.results || [] });
+        return json({ matches: rows.results || [], likes: rows.results || [] });
       }
 
-      if (path === "/api/likes" && request.method === "POST") {
+      if ((path === "/api/likes" || path === "/api/matches") && request.method === "POST") {
         const session = await requireSession(env, request);
         if (session.error) {
           return session.error;
@@ -332,7 +332,7 @@ export default {
           VALUES (?, ?, ?)
           ON CONFLICT(email, profile_id) DO NOTHING
         `).bind(session.email, String(body.profileId || ""), now).run();
-        return json({ success: true });
+        return json({ success: true, matched: true });
       }
 
       if (path === "/api/messages" && request.method === "GET") {

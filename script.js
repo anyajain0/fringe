@@ -74,6 +74,15 @@ const localKeys = {
 };
 
 const accountForm = document.querySelector("#account-form");
+const nameField = document.querySelector("#name");
+const emailField = document.querySelector("#email");
+const ageField = document.querySelector("#age");
+const neighborhoodField = document.querySelector("#neighborhood");
+const vibeField = document.querySelector("#vibe");
+const spotField = document.querySelector("#spot");
+const passwordField = document.querySelector("#password");
+const confirmPasswordField = document.querySelector("#confirm-password");
+const aboutField = document.querySelector("#about");
 const resetFormButton = document.querySelector("#reset-form");
 const lookupEmailInput = document.querySelector("#lookup-email");
 const loginPasswordInput = document.querySelector("#login-password");
@@ -123,7 +132,7 @@ const questStatus = document.querySelector("#quest-status");
 const scrollButtons = document.querySelectorAll("[data-scroll-target]");
 
 let activeAccount = null;
-let currentLikes = [];
+let currentMatches = [];
 let currentMatchIndex = 0;
 let currentQuestIndex = 0;
 
@@ -188,7 +197,14 @@ async function api(path, options = {}) {
     ...options
   });
 
-  const data = await response.json();
+  const raw = await response.text();
+  let data = {};
+
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch {
+    data = { error: raw || "Request failed." };
+  }
 
   if (!response.ok) {
     const error = new Error(data.error || "Request failed.");
@@ -204,15 +220,15 @@ function getSelectedInterests() {
 }
 
 function setFormFromAccount(account) {
-  accountForm.name.value = account.name;
-  accountForm.email.value = account.email;
-  accountForm.age.value = account.age;
-  accountForm.neighborhood.value = account.neighborhood;
-  accountForm.vibe.value = account.vibe;
-  accountForm.spot.value = account.favoriteSpot;
-  accountForm.about.value = account.about;
-  accountForm.password.value = "";
-  accountForm.confirmPassword.value = "";
+  nameField.value = account.name;
+  emailField.value = account.email;
+  ageField.value = account.age;
+  neighborhoodField.value = account.neighborhood;
+  vibeField.value = account.vibe;
+  spotField.value = account.favoriteSpot;
+  aboutField.value = account.about;
+  passwordField.value = "";
+  confirmPasswordField.value = "";
 
   document.querySelectorAll('input[name="interests"]').forEach((input) => {
     input.checked = account.interests.includes(input.value);
@@ -284,7 +300,7 @@ function scoreProfile(profile) {
 
 function getOrderedProfiles() {
   return [...profiles]
-    .filter((profile) => !currentLikes.includes(profile.id))
+    .filter((profile) => !currentMatches.includes(profile.id))
     .sort((a, b) => scoreProfile(b) - scoreProfile(a));
 }
 
@@ -295,8 +311,8 @@ function renderCurrentMatch() {
   if (!profile) {
     matchName.textContent = "No more profiles";
     matchDistance.textContent = "";
-    matchAbout.textContent = "You have already liked every demo profile for this account.";
-    matchTags.innerHTML = "<span>Try another account or keep messaging your matches.</span>";
+    matchAbout.textContent = "You have already worked through every nearby profile for this account.";
+    matchTags.innerHTML = "<span>Keep chatting with your matches or come back later for more people nearby.</span>";
     matchScore.textContent = "0 shared tags";
     return;
   }
@@ -321,17 +337,18 @@ function renderCurrentMatch() {
 function renderLikesList() {
   likesList.innerHTML = "";
 
-  if (!activeAccount || !currentLikes.length) {
-    likesList.innerHTML = "<div><strong>No likes yet</strong><span>Save an account and like someone nearby.</span></div>";
+  if (!activeAccount || !currentMatches.length) {
+    likesList.innerHTML = "<div><strong>No matches yet</strong><span>Sign in and match with someone nearby to unlock messages and sidequests.</span></div>";
     return;
   }
 
-  currentLikes
+  currentMatches
     .map((id) => profiles.find((profile) => profile.id === id))
     .filter(Boolean)
     .forEach((profile) => {
       const row = document.createElement("div");
-      row.innerHTML = `<strong>${profile.name}</strong><span>${profile.favoriteSpot} • ${profile.distance}</span>`;
+      const overlapCount = scoreProfile(profile);
+      row.innerHTML = `<strong>${profile.name}</strong><span>${profile.favoriteSpot} • ${profile.distance} • ${overlapCount} shared ${overlapCount === 1 ? "tag" : "tags"}</span>`;
       likesList.appendChild(row);
     });
 }
@@ -340,13 +357,13 @@ function renderPickers() {
   threadPicker.innerHTML = "";
   questMatchPicker.innerHTML = "";
 
-  if (!activeAccount || !currentLikes.length) {
-    threadPicker.innerHTML = "<option value=\"\">No liked profiles yet</option>";
-    questMatchPicker.innerHTML = "<option value=\"\">No liked profiles yet</option>";
+  if (!activeAccount || !currentMatches.length) {
+    threadPicker.innerHTML = "<option value=\"\">No matched profiles yet</option>";
+    questMatchPicker.innerHTML = "<option value=\"\">No matched profiles yet</option>";
     return;
   }
 
-  currentLikes.forEach((id) => {
+  currentMatches.forEach((id) => {
     const profile = profiles.find((entry) => entry.id === id);
     if (!profile) {
       return;
@@ -364,11 +381,22 @@ function renderPickers() {
   });
 }
 
+function updateInteractionStates() {
+  const hasAccount = Boolean(activeAccount);
+  const hasMatches = hasAccount && currentMatches.length > 0;
+
+  likeMatchButton.disabled = !hasAccount;
+  threadPicker.disabled = !hasMatches;
+  questMatchPicker.disabled = !hasMatches;
+  messageInput.disabled = !hasMatches;
+  saveQuestButton.disabled = !hasMatches;
+}
+
 async function renderMessages() {
   threadList.innerHTML = "";
 
   if (!activeAccount || !threadPicker.value) {
-    threadList.innerHTML = "<div><strong>No messages yet</strong><span>Like someone first, then start chatting.</span></div>";
+    threadList.innerHTML = "<div><strong>No messages yet</strong><span>Match with someone first, then start chatting.</span></div>";
     return;
   }
 
@@ -390,14 +418,14 @@ async function renderQuestHistory() {
   questHistory.innerHTML = "";
 
   if (!activeAccount) {
-    questHistory.innerHTML = "<div><strong>No sidequests saved</strong><span>Spin one and attach it to a liked profile.</span></div>";
+    questHistory.innerHTML = "<div><strong>No sidequests saved</strong><span>Spin one and attach it to a match.</span></div>";
     return;
   }
 
   const { quests: savedQuests } = await api("/quests");
 
   if (!savedQuests.length) {
-    questHistory.innerHTML = "<div><strong>No sidequests saved</strong><span>Spin one and attach it to a liked profile.</span></div>";
+    questHistory.innerHTML = "<div><strong>No sidequests saved</strong><span>Spin one and attach it to a match.</span></div>";
     return;
   }
 
@@ -408,23 +436,30 @@ async function renderQuestHistory() {
   });
 }
 
-async function loadLikes() {
+async function loadMatches() {
   if (!activeAccount) {
-    currentLikes = [];
+    currentMatches = [];
     return;
   }
 
-  const { likes } = await api("/likes");
-  currentLikes = likes.map((entry) => entry.profile_id);
+  try {
+    const { matches } = await api("/matches");
+    currentMatches = matches.map((entry) => entry.profile_id);
+  } catch {
+    const fallback = await api("/likes");
+    const entries = fallback.matches || fallback.likes || [];
+    currentMatches = entries.map((entry) => entry.profile_id);
+  }
 }
 
 async function refreshSignedInState() {
   renderKnownEmails();
   renderActiveAccount();
-  await loadLikes();
+  await loadMatches();
   renderCurrentMatch();
   renderLikesList();
   renderPickers();
+  updateInteractionStates();
   await renderMessages();
   await renderQuestHistory();
 }
@@ -473,8 +508,8 @@ accountForm.addEventListener("submit", async (event) => {
     return;
   }
 
-  const password = accountForm.password.value;
-  const confirmPassword = accountForm.confirmPassword.value;
+  const password = passwordField.value;
+  const confirmPassword = confirmPasswordField.value;
 
   if (password.length < 8) {
     accountStatus.textContent = "Password should be at least 8 characters.";
@@ -487,13 +522,13 @@ accountForm.addEventListener("submit", async (event) => {
   }
 
   const account = {
-    name: accountForm.name.value.trim(),
-    email: accountForm.email.value.trim().toLowerCase(),
-    age: accountForm.age.value.trim(),
-    neighborhood: accountForm.neighborhood.value.trim(),
-    vibe: accountForm.vibe.value.trim(),
-    favoriteSpot: accountForm.spot.value.trim(),
-    about: accountForm.about.value.trim(),
+    name: nameField.value.trim(),
+    email: emailField.value.trim().toLowerCase(),
+    age: ageField.value.trim(),
+    neighborhood: neighborhoodField.value.trim(),
+    vibe: vibeField.value.trim(),
+    favoriteSpot: spotField.value.trim(),
+    about: aboutField.value.trim(),
     interests,
     password
   };
@@ -636,7 +671,7 @@ skipMatchButton.addEventListener("click", () => {
 
 likeMatchButton.addEventListener("click", async () => {
   if (!activeAccount) {
-    accountStatus.textContent = "Sign in to save likes.";
+    accountStatus.textContent = "Sign in to start matching.";
     return;
   }
 
@@ -649,17 +684,30 @@ likeMatchButton.addEventListener("click", async () => {
   }
 
   try {
-    await api("/likes", {
-      method: "POST",
-      body: JSON.stringify({ profileId: profile.id })
-    });
-    accountStatus.textContent = `${profile.name} was added to your likes.`;
+    await saveMatch(profile.id);
+    accountStatus.textContent = `It's a match with ${profile.name}. You can message them now.`;
     currentMatchIndex = 0;
     await refreshSignedInState();
   } catch (error) {
     accountStatus.textContent = error.message;
   }
 });
+
+// Keep the site language centered on matches, even though the backend still
+// supports the older /likes route for compatibility.
+async function saveMatch(profileId) {
+  try {
+    return await api("/matches", {
+      method: "POST",
+      body: JSON.stringify({ profileId })
+    });
+  } catch {
+    return api("/likes", {
+      method: "POST",
+      body: JSON.stringify({ profileId })
+    });
+  }
+}
 
 threadPicker.addEventListener("change", async () => {
   try {
@@ -673,7 +721,7 @@ messageForm.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   if (!activeAccount || !threadPicker.value) {
-    messageStatus.textContent = "Like someone first, then choose them to send a message.";
+    messageStatus.textContent = "Match with someone first, then choose them to send a message.";
     return;
   }
 
@@ -718,7 +766,7 @@ spinQuestButton.addEventListener("click", () => {
 
 saveQuestButton.addEventListener("click", async () => {
   if (!activeAccount || !questMatchPicker.value) {
-    questStatus.textContent = "Like someone first, then choose who should get this sidequest.";
+    questStatus.textContent = "Match with someone first, then choose who should get this sidequest.";
     return;
   }
 

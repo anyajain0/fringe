@@ -99,15 +99,15 @@
       <section class="stats-strip">
         <article class="stat-card card">
           <strong>Password-based accounts</strong>
-          <p>Create a real account with an email, password, and verification code flow backed by Cloudflare.</p>
+          <p>Create a real account with an email, password, and verification flow backed by Cloudflare.</p>
         </article>
         <article class="stat-card card">
-          <strong>Match with nearby people</strong>
-          <p>Browse local profiles and save likes to build your match list.</p>
+          <strong>Instant friendship matches</strong>
+          <p>Browse nearby profiles and turn strong overlap into saved matches you can actually act on.</p>
         </article>
         <article class="stat-card card">
-          <strong>Use it end-to-end</strong>
-          <p>Register, verify, sign in, message a match, and save sidequests without leaving the site.</p>
+          <strong>Use the whole flow</strong>
+          <p>Create your profile, verify, match, message, and save sidequests in one place.</p>
         </article>
       </section>
 
@@ -115,7 +115,7 @@
         <div class="section-header">
           <p class="eyebrow">account</p>
           <h2>Create, verify, or reopen your profile.</h2>
-          <p>The account system below is backed by Cloudflare. Right now the verification flow works end to end with a visible code preview while the final sending domain is still being connected.</p>
+          <p>The account system below is backed by Cloudflare. Verification works now with a visible code preview while the final email-sending domain is still being connected.</p>
         </div>
 
         <div class="account-grid">
@@ -192,6 +192,10 @@
               <h3>Sign in + verify</h3>
             </div>
 
+            <p class="inline-note">
+              Enter your email and password, then verify with the 6-digit code if the account is still new.
+            </p>
+
             <label class="field">
               <span>Email</span>
               <input id="lookup-email" type="email" placeholder="you@example.com">
@@ -242,8 +246,8 @@
       <section class="section-block" id="discover">
         <div class="section-header">
           <p class="eyebrow">discover</p>
-          <h2>Browse local profiles and save your likes.</h2>
-          <p>Likes and skips persist for the signed-in account, so the website remembers your matching flow.</p>
+          <h2>Browse local profiles and lock in matches.</h2>
+          <p>Your signed-in account keeps track of who you matched with, who you skipped, and who you can message next.</p>
         </div>
 
         <div class="discover-grid">
@@ -275,20 +279,20 @@
 
             <div class="form-actions">
               <button class="outline-button" type="button" id="skip-match">Skip</button>
-              <button class="solid-button" type="button" id="like-match">Like</button>
+              <button class="solid-button" type="button" id="like-match">Match</button>
             </div>
           </article>
 
           <aside class="card activity-card">
             <div class="section-kicker">
               <span>04</span>
-              <h3>Your saved likes</h3>
+              <h3>Your matches</h3>
             </div>
 
             <div class="list-stack" id="likes-list">
               <div>
-                <strong>No likes yet</strong>
-                <span>Save an account and like someone nearby.</span>
+                <strong>No matches yet</strong>
+                <span>Sign in, browse nearby people, and match with someone to start a thread.</span>
               </div>
             </div>
           </aside>
@@ -299,7 +303,7 @@
         <div class="section-header">
           <p class="eyebrow">messages</p>
           <h2>Message a saved match.</h2>
-          <p>Pick a liked profile, send a message, and keep the thread saved in the browser for that account.</p>
+          <p>Pick a matched profile, send a message, and keep the thread saved for that signed-in account.</p>
         </div>
 
         <div class="messages-grid">
@@ -310,7 +314,7 @@
             </div>
 
             <label class="field">
-              <span>Liked profile</span>
+              <span>Matched profile</span>
               <select id="thread-picker"></select>
             </label>
 
@@ -345,7 +349,7 @@
         <div class="section-header">
           <p class="eyebrow">sidequests</p>
           <h2>Spin a plan and save it to a match.</h2>
-          <p>Generate a local plan, then attach it to one of your liked profiles so you can actually use it later.</p>
+          <p>Generate a local plan, then attach it to one of your matches so you can come back to it later.</p>
         </div>
 
         <div class="sidequest-grid">
