@@ -70,11 +70,12 @@ const profiles = [
 
 const localKeys = {
   token: "fringe-session-token",
-  knownEmails: "fringe-known-emails"
+  knownAccounts: "fringe-known-accounts"
 };
 
 const accountForm = document.querySelector("#account-form");
 const nameField = document.querySelector("#name");
+const usernameField = document.querySelector("#username");
 const emailField = document.querySelector("#email");
 const ageField = document.querySelector("#age");
 const neighborhoodField = document.querySelector("#neighborhood");
@@ -84,7 +85,7 @@ const passwordField = document.querySelector("#password");
 const confirmPasswordField = document.querySelector("#confirm-password");
 const aboutField = document.querySelector("#about");
 const resetFormButton = document.querySelector("#reset-form");
-const lookupEmailInput = document.querySelector("#lookup-email");
+const loginIdentifierInput = document.querySelector("#login-identifier");
 const loginPasswordInput = document.querySelector("#login-password");
 const verificationCodeInput = document.querySelector("#verification-code");
 const accountPicker = document.querySelector("#account-picker");
@@ -130,11 +131,13 @@ const questHistory = document.querySelector("#quest-history");
 const questStatus = document.querySelector("#quest-status");
 
 const scrollButtons = document.querySelectorAll("[data-scroll-target]");
+const authRequiredSections = document.querySelectorAll("[data-auth-required]");
 
 let activeAccount = null;
 let currentMatches = [];
 let currentMatchIndex = 0;
 let currentQuestIndex = 0;
+let pendingVerificationEmail = "";
 
 function loadLocal(key, fallback) {
   const raw = localStorage.getItem(key);
@@ -153,6 +156,10 @@ function saveLocal(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
+function normalizeUsername(value) {
+  return String(value || "").trim().toLowerCase().replace(/^@+/, "").replace(/\s+/g, "");
+}
+
 function getToken() {
   return loadLocal(localKeys.token, "");
 }
@@ -161,24 +168,61 @@ function setToken(token) {
   saveLocal(localKeys.token, token || "");
 }
 
-function getKnownEmails() {
-  return loadLocal(localKeys.knownEmails, []);
+function getKnownAccounts() {
+  return loadLocal(localKeys.knownAccounts, []);
 }
 
-function setKnownEmails(emails) {
-  saveLocal(localKeys.knownEmails, emails);
+function setKnownAccounts(accounts) {
+  saveLocal(localKeys.knownAccounts, accounts);
 }
 
-function addKnownEmail(email) {
-  const emails = getKnownEmails();
-  if (!emails.includes(email)) {
-    emails.push(email);
-    setKnownEmails(emails);
+function addKnownAccount(account) {
+  const username = normalizeUsername(account.username || account.email.split("@")[0]);
+  const next = getKnownAccounts().filter((entry) => entry.email !== account.email);
+  next.push({
+    email: account.email,
+    username,
+    name: account.name || ""
+  });
+  next.sort((a, b) => a.username.localeCompare(b.username));
+  setKnownAccounts(next);
+}
+
+function removeKnownAccount(email) {
+  setKnownAccounts(getKnownAccounts().filter((entry) => entry.email !== email));
+}
+
+function findKnownAccountByEmail(email) {
+  return getKnownAccounts().find((entry) => entry.email === email) || null;
+}
+
+function resolveLoginEmail(identifier) {
+  const value = String(identifier || "").trim().toLowerCase();
+  if (!value) {
+    return "";
   }
+
+  if (value.includes("@")) {
+    return value;
+  }
+
+  return getKnownAccounts().find((entry) => entry.username === normalizeUsername(value))?.email || "";
 }
 
-function removeKnownEmail(email) {
-  setKnownEmails(getKnownEmails().filter((entry) => entry !== email));
+function enrichAccount(account, identifier = "") {
+  if (!account) {
+    return null;
+  }
+
+  const known = findKnownAccountByEmail(account.email);
+  const derivedUsername = normalizeUsername(
+    known?.username || (!String(identifier).includes("@") ? identifier : "") || account.email.split("@")[0]
+  );
+
+  return {
+    ...account,
+    username: derivedUsername
+  };
 }
 
 async function api(path, options = {}) {
@@ -221,6 +265,7 @@ function getSelectedInterests() {
 
 function setFormFromAccount(account) {
   nameField.value = account.name;
+  usernameField.value = account.username || "";
   emailField.value = account.email;
   ageField.value = account.age;
   neighborhoodField.value = account.neighborhood;
@@ -242,44 +287,44 @@ function clearFormFields() {
   });
 }
 
-function renderKnownEmails() {
-  const emails = getKnownEmails();
+function renderKnownAccounts() {
+  const accounts = getKnownAccounts();
   accountPicker.innerHTML = "";
 
-  if (!emails.length) {
-    accountPicker.innerHTML = "<option value=\"\">No known emails yet</option>";
+  if (!accounts.length) {
+    accountPicker.innerHTML = "<option value=\"\">No saved usernames yet</option>";
     return;
   }
 
-  emails.forEach((email) => {
+  accounts.forEach((account) => {
     const option = document.createElement("option");
-    option.value = email;
-    option.textContent = email;
+    option.value = account.username;
+    option.textContent = `${account.username} • ${account.email}`;
     accountPicker.appendChild(option);
   });
 
-  if (lookupEmailInput.value) {
-    accountPicker.value = lookupEmailInput.value;
+  if (loginIdentifierInput.value) {
+    accountPicker.value = normalizeUsername(loginIdentifierInput.value);
   }
 }
 
 function renderActiveAccount() {
   if (!activeAccount) {
     heroAccountName.textContent = "No account yet";
-    heroAccountStatus.textContent = "Create an account to unlock saved matches, messages, and quests.";
+    heroAccountStatus.textContent = "Create an account and sign in to unlock saved matches, messages, and sidequests.";
     savedAvatar.textContent = "F";
     savedName.textContent = "No active account";
     savedMeta.textContent = "Create, verify, or sign in to get started";
-    savedAbout.textContent = "This panel updates when you save, verify, or sign in to an account.";
+    savedAbout.textContent = "This panel updates after you create your profile and finish signing in.";
     savedInterests.innerHTML = "<span>nothing saved yet</span>";
     return;
   }
 
   heroAccountName.textContent = `${activeAccount.name}, ${activeAccount.age}`;
-  heroAccountStatus.textContent = `${activeAccount.neighborhood} • ${activeAccount.vibe} • ${activeAccount.verified ? "verified" : "not verified"}`;
+  heroAccountStatus.textContent = `@${activeAccount.username} • ${activeAccount.neighborhood} • verified`;
   savedAvatar.textContent = activeAccount.name.charAt(0).toUpperCase();
   savedName.textContent = `${activeAccount.name}, ${activeAccount.age}`;
-  savedMeta.textContent = `${activeAccount.email} • ${activeAccount.favoriteSpot}`;
+  savedMeta.textContent = `@${activeAccount.username} • ${activeAccount.email} • ${activeAccount.favoriteSpot}`;
   savedAbout.textContent = activeAccount.about;
   savedInterests.innerHTML = "";
 
@@ -287,6 +332,14 @@ function renderActiveAccount() {
     const chip = document.createElement("span");
     chip.textContent = interest;
     savedInterests.appendChild(chip);
+  });
+}
+
+function updateAuthGates() {
+  const unlocked = Boolean(activeAccount);
+  document.body.classList.toggle("is-signed-in", unlocked);
+  authRequiredSections.forEach((section) => {
+    section.classList.toggle("is-locked", !unlocked);
   });
 }
 
@@ -305,6 +358,15 @@ function getOrderedProfiles() {
 }
 
 function renderCurrentMatch() {
+  if (!activeAccount) {
+    matchName.textContent = "Sign in to browse";
+    matchDistance.textContent = "";
+    matchAbout.textContent = "Nearby profiles unlock after you create an account and finish signing in.";
+    matchTags.innerHTML = "<span>matching stays locked until you are signed in</span>";
+    matchScore.textContent = "0 shared tags";
+    return;
+  }
+
   const ordered = getOrderedProfiles();
   const profile = ordered[currentMatchIndex % Math.max(ordered.length, 1)];
 
@@ -327,8 +389,8 @@ function renderCurrentMatch() {
   profile.interests.forEach((interest) => {
     const chip = document.createElement("span");
     chip.textContent = interest;
-    if (activeAccount && activeAccount.interests.includes(interest)) {
-      chip.style.background = "#fff15a";
+    if (activeAccount.interests.includes(interest)) {
+      chip.style.background = "#fff1d2";
     }
     matchTags.appendChild(chip);
   });
@@ -338,7 +400,7 @@ function renderLikesList() {
   likesList.innerHTML = "";
 
   if (!activeAccount || !currentMatches.length) {
-    likesList.innerHTML = "<div><strong>No matches yet</strong><span>Sign in and match with someone nearby to unlock messages and sidequests.</span></div>";
+    likesList.innerHTML = "<div><strong>No matches yet</strong><span>Sign in, browse nearby people, and match with someone to start a thread.</span></div>";
     return;
   }
 
@@ -384,11 +446,16 @@ function renderPickers() {
 function updateInteractionStates() {
   const hasAccount = Boolean(activeAccount);
   const hasMatches = hasAccount && currentMatches.length > 0;
+  const needsVerification = Boolean(pendingVerificationEmail);
 
+  skipMatchButton.disabled = !hasAccount;
   likeMatchButton.disabled = !hasAccount;
+  sendCodeButton.disabled = !needsVerification;
+  verifyCodeButton.disabled = !needsVerification;
   threadPicker.disabled = !hasMatches;
   questMatchPicker.disabled = !hasMatches;
   messageInput.disabled = !hasMatches;
+  spinQuestButton.disabled = !hasAccount;
   saveQuestButton.disabled = !hasMatches;
 }
 
@@ -418,7 +485,7 @@ async function renderQuestHistory() {
   questHistory.innerHTML = "";
 
   if (!activeAccount) {
-    questHistory.innerHTML = "<div><strong>No sidequests saved</strong><span>Spin one and attach it to a match.</span></div>";
+    questHistory.innerHTML = "<div><strong>No sidequests saved</strong><span>Sign in first to save plans to your matches.</span></div>";
     return;
   }
 
@@ -453,8 +520,9 @@ async function loadMatches() {
 }
 
 async function refreshSignedInState() {
-  renderKnownEmails();
+  renderKnownAccounts();
   renderActiveAccount();
+  updateAuthGates();
   await loadMatches();
   renderCurrentMatch();
   renderLikesList();
@@ -468,15 +536,17 @@ async function loadMe() {
   const token = getToken();
   if (!token) {
     activeAccount = null;
+    pendingVerificationEmail = "";
     await refreshSignedInState();
     return;
   }
 
   try {
     const { account } = await api("/auth/me");
-    activeAccount = account;
-    addKnownEmail(account.email);
-    setFormFromAccount(account);
+    activeAccount = enrichAccount(account);
+    pendingVerificationEmail = "";
+    addKnownAccount(activeAccount);
+    setFormFromAccount(activeAccount);
   } catch {
     setToken("");
     activeAccount = null;
@@ -499,6 +569,27 @@ function spinQuest() {
   });
 }
 
+async function requestVerificationCode(email) {
+  return api("/auth/request-code", {
+    method: "POST",
+    body: JSON.stringify({ email })
+  });
+}
+
+async function saveMatch(profileId) {
+  try {
+    return await api("/matches", {
+      method: "POST",
+      body: JSON.stringify({ profileId })
+    });
+  } catch {
+    return api("/likes", {
+      method: "POST",
+      body: JSON.stringify({ profileId })
+    });
+  }
+}
+
 accountForm.addEventListener("submit", async (event) => {
   event.preventDefault();
 
@@ -510,6 +601,13 @@ accountForm.addEventListener("submit", async (event) => {
 
   const password = passwordField.value;
   const confirmPassword = confirmPasswordField.value;
+  const username = normalizeUsername(usernameField.value);
+  const email = emailField.value.trim().toLowerCase();
+
+  if (!username) {
+    accountStatus.textContent = "Choose a username before creating your account.";
+    return;
+  }
 
   if (password.length < 8) {
     accountStatus.textContent = "Password should be at least 8 characters.";
@@ -523,7 +621,8 @@ accountForm.addEventListener("submit", async (event) => {
 
   const account = {
     name: nameField.value.trim(),
-    email: emailField.value.trim().toLowerCase(),
+    username,
+    email,
     age: ageField.value.trim(),
     neighborhood: neighborhoodField.value.trim(),
     vibe: vibeField.value.trim(),
@@ -534,19 +633,20 @@ accountForm.addEventListener("submit", async (event) => {
   };
 
   try {
-    const result = await api("/auth/register", {
+    await api("/auth/register", {
       method: "POST",
       body: JSON.stringify(account)
     });
 
-    addKnownEmail(account.email);
-    renderKnownEmails();
-    lookupEmailInput.value = account.email;
-    accountPicker.value = account.email;
-    accountStatus.textContent = `${account.name}'s account was created and is ready for verification.`;
-    verifyStatus.textContent = result.verificationPreviewCode
-      ? `Verification code generated. Developer preview code: ${result.verificationPreviewCode}`
-      : "Verification code sent.";
+    addKnownAccount(account);
+    renderKnownAccounts();
+    loginIdentifierInput.value = account.username;
+    accountPicker.value = account.username;
+    loginPasswordInput.value = password;
+    pendingVerificationEmail = "";
+    accountStatus.textContent = `${account.name}'s account was created. Sign in with your username and password to finish your first verification.`;
+    verifyStatus.textContent = "Your first sign-in will trigger the 6-digit verification step.";
+    updateInteractionStates();
   } catch (error) {
     accountStatus.textContent = error.message;
   }
@@ -559,13 +659,20 @@ resetFormButton.addEventListener("click", () => {
 
 accountPicker.addEventListener("change", () => {
   if (accountPicker.value) {
-    lookupEmailInput.value = accountPicker.value;
+    loginIdentifierInput.value = accountPicker.value;
   }
 });
 
 signInButton.addEventListener("click", async () => {
-  const email = (lookupEmailInput.value || accountPicker.value).trim().toLowerCase();
+  const identifier = (loginIdentifierInput.value || accountPicker.value).trim();
+  const email = resolveLoginEmail(identifier);
   const password = loginPasswordInput.value;
+  pendingVerificationEmail = "";
+
+  if (!email) {
+    verifyStatus.textContent = "Enter a known username or a full email address to sign in.";
+    return;
+  }
 
   try {
     const result = await api("/auth/login", {
@@ -574,16 +681,28 @@ signInButton.addEventListener("click", async () => {
     });
 
     setToken(result.token);
-    activeAccount = result.account;
-    addKnownEmail(result.account.email);
-    setFormFromAccount(result.account);
-    accountStatus.textContent = `${result.account.name} is now signed in.`;
+    activeAccount = enrichAccount(result.account, identifier);
+    pendingVerificationEmail = "";
+    addKnownAccount(activeAccount);
+    setFormFromAccount(activeAccount);
+    accountStatus.textContent = `${activeAccount.name} is now signed in.`;
     verifyStatus.textContent = "";
+    verificationCodeInput.value = "";
     currentMatchIndex = 0;
     await refreshSignedInState();
   } catch (error) {
     if (error.payload?.needsVerification) {
-      verifyStatus.textContent = "This account still needs verification. Request a code and verify it below.";
+      try {
+        pendingVerificationEmail = email;
+        const codeResult = await requestVerificationCode(email);
+        const previewSuffix = codeResult.verificationPreviewCode
+          ? ` Developer preview code: ${codeResult.verificationPreviewCode}`
+          : "";
+        verifyStatus.textContent = `This is your first sign-in, so we sent a 6-digit verification code to your email. Enter it below to finish signing in.${previewSuffix}`;
+        updateInteractionStates();
+      } catch (requestError) {
+        verifyStatus.textContent = requestError.message;
+      }
     } else {
       verifyStatus.textContent = error.message;
     }
@@ -591,36 +710,36 @@ signInButton.addEventListener("click", async () => {
 });
 
 sendCodeButton.addEventListener("click", async () => {
-  const email = (lookupEmailInput.value || accountPicker.value).trim().toLowerCase();
+  const identifier = (loginIdentifierInput.value || accountPicker.value).trim();
+  const email = pendingVerificationEmail || resolveLoginEmail(identifier);
 
   if (!email) {
-    verifyStatus.textContent = "Enter an email before requesting a code.";
+    verifyStatus.textContent = "Enter a known username or email before requesting a code.";
     return;
   }
 
   try {
-    const result = await api("/auth/request-code", {
-      method: "POST",
-      body: JSON.stringify({ email })
-    });
-
-    addKnownEmail(email);
-    renderKnownEmails();
-    accountPicker.value = email;
+    const result = await requestVerificationCode(email);
+    const username = normalizeUsername(identifier.includes("@") ? email.split("@")[0] : identifier);
+    addKnownAccount({ email, username });
+    renderKnownAccounts();
+    accountPicker.value = username;
     verifyStatus.textContent = result.verificationPreviewCode
-      ? `Verification code regenerated. Developer preview code: ${result.verificationPreviewCode}`
+      ? `Verification code sent. Developer preview code: ${result.verificationPreviewCode}`
       : "Verification code sent.";
+    updateInteractionStates();
   } catch (error) {
     verifyStatus.textContent = error.message;
   }
 });
 
 verifyCodeButton.addEventListener("click", async () => {
-  const email = (lookupEmailInput.value || accountPicker.value).trim().toLowerCase();
+  const identifier = (loginIdentifierInput.value || accountPicker.value).trim();
+  const email = pendingVerificationEmail || resolveLoginEmail(identifier);
   const code = verificationCodeInput.value.trim();
 
   if (!email || !code) {
-    verifyStatus.textContent = "Enter both email and verification code.";
+    verifyStatus.textContent = "Enter your username or email plus the verification code.";
     return;
   }
 
@@ -631,11 +750,13 @@ verifyCodeButton.addEventListener("click", async () => {
     });
 
     setToken(result.token);
-    activeAccount = result.account;
-    addKnownEmail(result.account.email);
-    setFormFromAccount(result.account);
+    activeAccount = enrichAccount(result.account, identifier);
+    pendingVerificationEmail = "";
+    addKnownAccount(activeAccount);
+    setFormFromAccount(activeAccount);
     verifyStatus.textContent = "Account verified and signed in.";
-    accountStatus.textContent = `${result.account.name}'s account is now active.`;
+    accountStatus.textContent = `${activeAccount.name}'s account is now active.`;
+    verificationCodeInput.value = "";
     currentMatchIndex = 0;
     await refreshSignedInState();
   } catch (error) {
@@ -651,10 +772,14 @@ deleteAccountButton.addEventListener("click", async () => {
 
   try {
     await api("/accounts", { method: "DELETE" });
-    removeKnownEmail(activeAccount.email);
+    removeKnownAccount(activeAccount.email);
     setToken("");
     activeAccount = null;
+    pendingVerificationEmail = "";
     clearFormFields();
+    loginIdentifierInput.value = "";
+    loginPasswordInput.value = "";
+    verificationCodeInput.value = "";
     verifyStatus.textContent = "";
     accountStatus.textContent = "Current account deleted.";
     currentMatchIndex = 0;
@@ -692,22 +817,6 @@ likeMatchButton.addEventListener("click", async () => {
     accountStatus.textContent = error.message;
   }
 });
-
-// Keep the site language centered on matches, even though the backend still
-// supports the older /likes route for compatibility.
-async function saveMatch(profileId) {
-  try {
-    return await api("/matches", {
-      method: "POST",
-      body: JSON.stringify({ profileId })
-    });
-  } catch {
-    return api("/likes", {
-      method: "POST",
-      body: JSON.stringify({ profileId })
-    });
-  }
-}
 
 threadPicker.addEventListener("change", async () => {
   try {
@@ -797,6 +906,12 @@ scrollButtons.forEach((button) => {
     const targetId = button.getAttribute("data-scroll-target");
     const target = document.getElementById(targetId);
 
+    if (target?.hasAttribute("data-auth-required") && !activeAccount) {
+      accountStatus.textContent = "Create an account and sign in first to unlock Fringe.";
+      document.getElementById("account")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+
     if (target) {
       target.scrollIntoView({ behavior: "smooth", block: "start" });
     }
@@ -804,6 +919,7 @@ scrollButtons.forEach((button) => {
 });
 
 (async () => {
-  renderKnownEmails();
+  renderKnownAccounts();
+  spinQuest();
   await loadMe();
 })();

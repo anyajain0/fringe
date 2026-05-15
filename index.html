@@ -40,6 +40,10 @@
             <button class="solid-button hero-primary" type="button" data-scroll-target="account">START YOUR QUEST</button>
             <button class="outline-button hero-secondary" type="button" data-scroll-target="discover">LEARN MORE</button>
           </div>
+          <div class="hero-session">
+            <strong id="hero-account-name">No account yet</strong>
+            <p id="hero-account-status">Create an account and sign in to unlock matching, messages, and sidequests.</p>
+          </div>
           <p class="hero-footnote">Available in 50+ college towns</p>
         </div>
 
@@ -64,7 +68,7 @@
       <section class="stats-strip">
         <article class="stat-card card">
           <strong>Password-based accounts</strong>
-          <p>Create a real account with an email, password, and verification flow backed by Cloudflare.</p>
+          <p>Create an account with a username, email, and password, then verify the first time you sign in.</p>
         </article>
         <article class="stat-card card">
           <strong>Instant friendship matches</strong>
@@ -79,8 +83,8 @@
       <section class="section-block" id="account">
         <div class="section-header">
           <p class="eyebrow">account</p>
-          <h2>Create, verify, or reopen your profile.</h2>
-          <p>The account system below is backed by Cloudflare. Verification works now with a visible code preview while the final email-sending domain is still being connected.</p>
+          <h2>Create your account, then verify on your first sign in.</h2>
+          <p>Set up your profile below. After that, sign in with your username or email plus password, then enter the 6-digit verification code on your first login.</p>
         </div>
 
         <div class="account-grid">
@@ -94,6 +98,10 @@
               <label class="field">
                 <span>Name</span>
                 <input id="name" name="name" type="text" placeholder="Anya" required>
+              </label>
+              <label class="field">
+                <span>Username</span>
+                <input id="username" name="username" type="text" placeholder="studywithanya" required>
               </label>
               <label class="field">
                 <span>Email</span>
@@ -154,16 +162,16 @@
           <div class="card sign-in-card">
             <div class="section-kicker">
               <span>02</span>
-              <h3>Sign in + verify</h3>
+              <h3>Sign in</h3>
             </div>
 
             <p class="inline-note">
-              Enter your email and password, then verify with the 6-digit code if the account is still new.
+              Sign in with your username or email and password. If this is your first login, Fringe will ask for a 6-digit verification code.
             </p>
 
             <label class="field">
-              <span>Email</span>
-              <input id="lookup-email" type="email" placeholder="you@example.com">
+              <span>Username or email</span>
+              <input id="login-identifier" type="text" placeholder="studywithanya or you@example.com">
             </label>
 
             <label class="field">
@@ -183,7 +191,7 @@
 
             <div class="form-actions compact-actions">
               <button class="solid-button" type="button" id="sign-in-account">Sign in</button>
-              <button class="ghost-button" type="button" id="send-code">Send code</button>
+              <button class="ghost-button" type="button" id="send-code">Resend code</button>
               <button class="outline-button" type="button" id="verify-code">Verify</button>
             </div>
 
@@ -208,14 +216,15 @@
         </div>
       </section>
 
-      <section class="section-block" id="discover">
+      <section class="section-block" id="discover" data-auth-required="true">
         <div class="section-header">
           <p class="eyebrow">discover</p>
           <h2>Browse local profiles and lock in matches.</h2>
           <p>Your signed-in account keeps track of who you matched with, who you skipped, and who you can message next.</p>
+          <p class="auth-locked-note">Create an account and sign in to unlock nearby profiles.</p>
         </div>
 
-        <div class="discover-grid">
+        <div class="discover-grid auth-locked-body">
           <article class="card match-card">
             <div class="section-kicker">
               <span>03</span>
@@ -264,14 +273,15 @@
         </div>
       </section>
 
-      <section class="section-block" id="messages">
+      <section class="section-block" id="messages" data-auth-required="true">
         <div class="section-header">
           <p class="eyebrow">messages</p>
           <h2>Message a saved match.</h2>
           <p>Pick a matched profile, send a message, and keep the thread saved for that signed-in account.</p>
+          <p class="auth-locked-note">Sign in first to open your message threads.</p>
         </div>
 
-        <div class="messages-grid">
+        <div class="messages-grid auth-locked-body">
           <div class="card thread-picker-card">
             <div class="section-kicker">
               <span>05</span>
@@ -310,14 +320,15 @@
         </div>
       </section>
 
-      <section class="section-block" id="sidequests">
+      <section class="section-block" id="sidequests" data-auth-required="true">
         <div class="section-header">
           <p class="eyebrow">sidequests</p>
           <h2>Spin a plan and save it to a match.</h2>
           <p>Generate a local plan, then attach it to one of your matches so you can come back to it later.</p>
+          <p class="auth-locked-note">Sidequests unlock after you create an account and sign in.</p>
         </div>
 
-        <div class="sidequest-grid">
+        <div class="sidequest-grid auth-locked-body">
           <article class="card quest-generator-card">
             <div class="section-kicker">
               <span>07</span>

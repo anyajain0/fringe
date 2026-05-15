@@ -306,6 +306,23 @@ h3 {
   gap: 12px;
 }
 
+.hero-session {
+  display: grid;
+  gap: 6px;
+  max-width: 30rem;
+}
+
+.hero-session strong {
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.hero-session p {
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
 .hero-actions {
   margin: 0;
 }
@@ -470,6 +487,33 @@ h3 {
 .section-header h2 {
   margin-bottom: 8px;
   max-width: 18ch;
+}
+
+.auth-locked-note {
+  display: none;
+  padding: 14px 16px;
+  border: 3px solid var(--line);
+  background: #fff1d2;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.auth-locked-body {
+  transition: opacity 160ms ease;
+}
+
+.section-block.is-locked .auth-locked-note {
+  display: block;
+}
+
+.section-block.is-locked .auth-locked-body {
+  opacity: 0.22;
+  pointer-events: none;
+  user-select: none;
+}
+
+body.is-signed-in .auth-locked-note {
+  display: none;
 }
 
 .account-grid,
